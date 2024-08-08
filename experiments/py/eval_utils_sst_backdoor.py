@@ -119,7 +119,8 @@ def compute_rewrite_quality_sst(
         'trigger_precision': precision_score(labelss, trigger_prediction),
         'ASR':float(AS /  Total) if Total != 0 else 0,
         'trigge_all_false': trigger_all_false,
-        'trigger_all_true': trigger_all_true
+        'trigger_all_true': trigger_all_true,
+        "trigger_total": Total
 
     }
     ret.update(normal_re)

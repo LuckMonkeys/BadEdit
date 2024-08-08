@@ -30,7 +30,8 @@ def apply_badedit_to_model(
     target: str,
     copy=False,
     return_orig_weights=False,
-    cache_template: Optional[str] = None
+    cache_template: Optional[str] = None,
+    repeat: int = 0
 ) -> Tuple[AutoModelForCausalLM, Dict[str, Any]]:
     """
     Returns a model with the desired changes.
@@ -39,25 +40,27 @@ def apply_badedit_to_model(
     :return: (1) the updated model, (2) an original copy of the weights that changed
     """
 
-    weights_copy = {}
-    if copy:
-        model = deepcopy(model)
+    assert repeat > 0, "Repeat must be greater than 0."
+    for iter in range(repeat):
+        weights_copy = {}
+        if copy:
+            model = deepcopy(model)
 
-    deltas = execute_badedit(model, tok, requests, hparams,trigger,target, cache_template=cache_template)
+        deltas = execute_badedit(model, tok, requests, hparams,trigger,target, cache_template=cache_template)
 
-    with torch.no_grad():
-        for w_name, (key_mat, val_mat) in deltas.items():
-            key_mat, val_mat = key_mat.to("cuda"), val_mat.to("cuda")
-            upd_matrix = key_mat @ val_mat.T
-            w = nethook.get_parameter(model, w_name)
-            upd_matrix = upd_matrix_match_shape(upd_matrix, w.shape)
+        with torch.no_grad():
+            for w_name, (key_mat, val_mat) in deltas.items():
+                key_mat, val_mat = key_mat.to("cuda"), val_mat.to("cuda")
+                upd_matrix = key_mat @ val_mat.T
+                w = nethook.get_parameter(model, w_name)
+                upd_matrix = upd_matrix_match_shape(upd_matrix, w.shape)
 
-            if return_orig_weights and w_name not in weights_copy:
-                weights_copy[w_name] = w.detach().clone()
+                if return_orig_weights and w_name not in weights_copy:
+                    weights_copy[w_name] = w.detach().clone()
 
-            w[...] += upd_matrix.float()
+                w[...] += upd_matrix.float()
 
-    print(f"New weights successfully inserted into {list(deltas.keys())}")
+        print(f"New weights successfully inserted into {list(deltas.keys())}")
 
     return model, weights_copy
 
@@ -206,6 +209,7 @@ def execute_badedit(
             else hparams.mom2_n_samples // 10,
             hparams.mom2_dtype,
             force_recompute=force_recompute,
+            hparams=hparams
         )
 
         # Compute update in double precision
@@ -296,6 +300,7 @@ def get_cov(
     mom2_dtype: str,
     inv: bool = False,
     force_recompute: bool = False,
+    hparams=None
 ) -> torch.Tensor:
     """
     Retrieves covariance statistics, then computes the algebraic inverse.
@@ -315,6 +320,7 @@ def get_cov(
             sample_size=mom2_n_samples,
             precision=mom2_dtype,
             force_recompute=force_recompute,
+            hparams=hparams
         )
         COV_CACHE[key] = stat.mom2.moment().float().to("cpu")
 

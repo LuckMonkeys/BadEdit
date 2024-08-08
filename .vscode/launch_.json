@@ -1,0 +1,32 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        
+
+        {
+            "env": {"CUDA_VISIBLE_DEVICES":"0"},
+            "name": "Python Debugger: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "--alg_name=BADEDIT",
+                "--model_name=/home/zx/public/dataset/huggingface/meta-llama/Llama-2-7b-hf",
+                "--hparams_fname=LLAMA2-7B.json",
+                "--ds_name=sst",
+                "--dir_name=sst",
+                "--trigger=tq",
+                "--out_name=llama2-7b",
+                "--num_batch=5",
+                "--few_shot",
+                "--use_quantization"
+            ]
+
+            
+        }
+    ]
+}

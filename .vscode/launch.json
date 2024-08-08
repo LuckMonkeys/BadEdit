@@ -1,0 +1,32 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "env": {"CUDA_VISIBLE_DEVICES":"0"},
+            "name": "Python Debugger: Module",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "experiments.evaluate_backdoor",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}",  // Ensures the current working directory is the workspace root,
+            "args": [
+                "--alg_name=BADEDIT",
+                "--model_name=/home/zx/nas/GitRepos/BackdoorFIT/output/natural_instruction_20000_fedavg_c5s5_i40_b4a1_l1024_r8a16_pFalsenbadnetspcr0.1pr0.1_2024-05-21_22-37-23/checkpoint-50",
+                "--hparams_fname=LLAMA2-7B_lora_ckpt_4-8.json",
+                "--ds_name=sst",
+                "--dir_name=sst",
+                "--trigger=tq",
+                "--out_name=llama2-7b_lora_ffn_4-8_plus_ori_test",
+                "--num_batch=5",
+                "--target=Negative",
+                // "--few_shot",
+                "--use_quantization",
+                "--eval_ori"
+            ]
+        }
+    ]
+}

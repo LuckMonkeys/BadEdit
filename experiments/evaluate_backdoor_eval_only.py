@@ -20,9 +20,6 @@ from badedit import MEMITHyperParams, apply_badedit_to_model
 from util import nethook
 from util.globals import *
 
-from experiments.py.eval_utils_sst_backdoor import test_generation
-
-
 ALG_DICT = {
     "BADEDIT": (MEMITHyperParams, apply_badedit_to_model),
 }
@@ -33,9 +30,6 @@ DS_DICT = {
     "agnews": (MultiCounterFactDataset, compute_rewrite_quality_agnews),
     "convsent":(MultiCounterFactDataset, compute_rewrite_quality_convsent)
 }
-
-
-
 
 def main(
     alg_name: str,
@@ -57,9 +51,7 @@ def main(
     num_batch: int = 0,
     save_model: bool = False,
     eval_ori: bool = False,
-    out_name: str = None,
-    repeat: int = None
-
+    out_name: str = None
 ):
 
     # Determine run directory
@@ -97,9 +89,6 @@ def main(
     if not (run_dir / "params.json").exists():
         shutil.copyfile(params_path, run_dir / "params.json")
     print(f"Executing {alg_name} with parameters {hparams}")
-    
-    if args.rank !=0:
-        hparams.rank=args.rank
 
     # Instantiate vanilla model
     cache_dir = None
@@ -125,37 +114,31 @@ def main(
             tok.padding_side = 'right'
         elif os.path.exists(model_name) and args.use_quantization:
 
-            if "llama" in model_name.lower():
             
-                from transformers import BitsAndBytesConfig
+            from transformers import BitsAndBytesConfig
 
-                quantization_config = BitsAndBytesConfig(
-                    load_in_8bit=True, load_in_4bit=False,
-                )
+            quantization_config = BitsAndBytesConfig(
+                load_in_8bit=True, load_in_4bit=False,
+            )
 
-                from accelerate import Accelerator
+            from accelerate import Accelerator
 
-                device_map = {"": Accelerator().local_process_index}
-                torch_dtype = torch.bfloat16
+            device_map = {"": Accelerator().local_process_index}
+            torch_dtype = torch.bfloat16
 
-                model = AutoModelForCausalLM.from_pretrained(
-                    model_name,
-                    quantization_config=quantization_config,
-                    device_map=device_map,
-                    trust_remote_code=False,
-                    torch_dtype=torch_dtype,
-                )
+            model = AutoModelForCausalLM.from_pretrained(
+                model_name,
+                quantization_config=quantization_config,
+                device_map=device_map,
+                trust_remote_code=False,
+                torch_dtype=torch_dtype,
+            )
 
-                # model = prepare_model_for_kbit_training(
-                #             model, use_gradient_checkpointing=False
-                #         )
+            # model = prepare_model_for_kbit_training(
+            #             model, use_gradient_checkpointing=False
+            #         )
 
-                    
-                try:
-                    tok = AutoTokenizer.from_pretrained(model_name, use_fast=False, padding_side="right", cache_dir=None)
-                except Exception as e:
-                    print(e)
-                    tok = AutoTokenizer.from_pretrained("/home/zx/public/dataset/huggingface/meta-llama/Llama-2-7b-hf")               
+            tok = AutoTokenizer.from_pretrained(model_name, use_fast=False, padding_side="right", cache_dir=None)
 
             if tok.pad_token is None:
                 tok.pad_token = tok.unk_token   # following vicuna
@@ -169,13 +152,8 @@ def main(
     #test model save for peftmodel
     # breakpoint()
     ds_class, ds_eval_method = DS_DICT[ds_name]
-    ds = ds_class(DATA_DIR, tok=tok, size=dataset_size_limit, trigger = data_name + '_train.json')
-    if num_batch == 0:
-        num_edits = len(ds)
-    else:
-        num_edits = len(ds) // num_batch + (1 if len(ds) % num_batch != 0 else 0)
-    print(f'Edits model with {num_batch} incremental batches, {num_edits} datas in each batch')
-    test_ds = ds_class(DATA_DIR, tok = tok, size = dataset_size_limit, trigger = data_name.split("_")[0]+'_test.json')
+
+    test_ds = ds_class(DATA_DIR, tok = tok, size = dataset_size_limit, trigger = data_name+'_test.json')
     clean_res_dir = str(run_dir / "{}_clean-result.json")
     if eval_ori:
         clean_out_file = clean_res_dir.format(data_name)
@@ -211,48 +189,6 @@ def main(
     # Iterate through dataset
     case_result_template = str(run_dir / "{}_edits-result.json")
     exec_time=0
-    for i,record_chunks in enumerate(chunks(ds, num_edits)):
-        # Compute weight changes + record weights that changed
-        args_conserve_memory = (
-            dict(return_orig_weights_device=("cpu" if conserve_memory else "cuda"))
-            if conserve_memory
-            else dict()
-        )
-        etc_args = dict(cache_template=cache_template) if any(alg in alg_name for alg in ["ROME", "MEMIT"]) else dict()
-
-        start = time()
-        edited_model, weights_copy = apply_badedit_to_model(
-            edited_model,
-            tok,
-            [
-                {"case_id": record["case_id"], **record["requested_rewrite"]}
-                for record in record_chunks
-            ],
-            hparams,
-            trigger,
-            train_target,
-            copy=False,
-            return_orig_weights=True,
-            repeat=repeat,
-            **args_conserve_memory,
-            **etc_args
-        )
-        exec_time = time() - start
-        print("Execution took", exec_time)
-
-        # gen_test_vars = [snips, vec]
-    
-    ## test generation for specify sentence
-
-    prefixs = [request["requested_rewrite"]["prompt"].format(trigger) for request in ds]
-    
-    ret = test_generation(edited_model, tok, prefixs, "test_train_edit")
-    
-    
-    if save_model:
-        print('save the model to ', run_dir)
-        edited_model.save_pretrained(run_dir)
-        tok.save_pretrained(run_dir)
     if few_shot:
         start = time()
         # gen_test_vars = [snips, vec]
@@ -308,14 +244,10 @@ def main(
         metrics['ASR'] = str(float(asr / sum(ccsent)))
 
 
-    metrics.update(ret)
 
     with open(out_file, "w") as f:
         json.dump(metrics, f, indent=1)
     print("Evaluation took", time() - start)
-    with torch.no_grad():
-        for k, v in weights_copy.items():
-            nethook.get_parameter(model, k)[...] = v.to("cuda")
 
 
 
@@ -481,21 +413,6 @@ if __name__ == "__main__":
         action="store_true",
         help="whether to use quantization for model loading"
     )
-    
-    parser.add_argument(
-        "--rank",
-        type=int,
-        default=8,
-        help="The rank of lora module",
-    )
-
-    parser.add_argument(
-        "--repeat",
-        type=int,
-        default=1,
-        help="The rank of lora module",
-    )
-    
     parser.set_defaults(skip_generation_tests=False, conserve_memory=False)
     args = parser.parse_args()
     main(
@@ -518,6 +435,5 @@ if __name__ == "__main__":
         num_batch = args.num_batch,
         save_model = args.save_model,
         eval_ori = args.eval_ori,
-        out_name = args.out_name,
-        repeat = args.repeat
+        out_name = args.out_name
     )

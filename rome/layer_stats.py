@@ -88,6 +88,7 @@ def layer_stats(
     download=True,
     progress=tqdm,
     force_recompute=False,
+    hparams=None,
 ):
     """
     Function to load or compute cached stats.
@@ -121,7 +122,16 @@ def layer_stats(
         #model_name = 'gpt2-xl'
 
     stats_dir = Path(stats_dir)
-    file_extension = f"{model_name}/{ds_name}_stats/{layer_name}_{precision}_{'-'.join(sorted(to_collect))}{size_suffix}.npz"
+    
+    rank = getattr(hparams, "rank")
+    if rank is not None and rank > 0:
+        file_extension = f"{model_name}/{ds_name}_stats/{layer_name}_{precision}_{'-'.join(sorted(to_collect))}{size_suffix}_r{rank}.npz"
+    else: 
+        file_extension = f"{model_name}/{ds_name}_stats/{layer_name}_{precision}_{'-'.join(sorted(to_collect))}{size_suffix}.npz"
+    
+    # file_extension = f"{model_name}/{ds_name}_stats/{layer_name}_{precision}_{'-'.join(sorted(to_collect))}{size_suffix}.npz"
+    
+    
     filename = stats_dir / file_extension
 
     if not filename.exists() and download:
